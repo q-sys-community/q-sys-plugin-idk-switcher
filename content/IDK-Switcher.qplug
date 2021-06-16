@@ -1,0 +1,487 @@
+-- The PluginInfo header contains some important information that Q-Sys Designer will parse when compiled.
+-- Id is a unique ID given to every plugin. While we typically use randomly generated UUID's, you can use anything here so long as it is unique
+--
+
+PluginInfo = {
+    Name = "IDK~Switcher (0.0.0.0-master)", -- The tilde here indicates folder structure in the Shematic Elements pane
+    Version = "0.0.0.0-master",
+    Id = "qsysc.idk.switcher.0.0.0.0-master", -- show this is just a unique id. Show some commented out 'fun' unique ids
+    Description = "Control for IDK IMP-S41U and IMP-400UHD switchers",
+    ShowDebug = true,
+    Author = "Solo Works London"
+}
+
+-- Once you've drawn your plugin in Designer, you can determine what colors you use a lot. Save yourself some time by putting them in a table, and then simply calling them later.
+local Colors = {
+    idk_red = {232, 12, 28},
+    White = {255, 255, 255},
+    Black = {0, 0, 0},
+    Red = {255, 0, 0},
+    Green = {0, 255, 0}
+}
+
+function GetColor(props)
+    return Colors.idk_red
+end
+
+input_count = 4
+
+-- We can let users determine some of the plugin properties by exposing them here
+-- While this function can be very useful, it is completely optional and not always needed.
+-- If no Properties are set here, only the position and fill properties of your plugin will show in the Properties pane
+function GetProperties()
+    props = {
+        {
+            Name = "IP Address",
+            Type = "string",
+            Value = "192.168.1.199"
+        }
+        --[[ -- Model isn't necessary, here for any potential future models
+            {
+            Name = "Model",
+            Type = "enum",
+            Choices = {"IMP-S41U", "IMP-400UHD"},
+            Value = "IMP-S41U"
+        }
+        ]]
+    }
+    return props
+end
+
+-- The below function is optional (like GetProperties() is), but it can allow further customization of what users can and can't do with your plugin.
+-- Another application of this is if you have different input/output types for different models, and want those properties to be dynamic in the Properties pane
+function RectifyProperties(props)
+    return props
+end
+
+-- The below function is where you will populate the controls for your plugin.
+-- If you've written some of the Runtime code already, simply use the control names you populated in Text Controller/Control Script, and use their Properties to inform the values here
+-- ControlType can be Button, Knob, Indicator or Text
+-- ButtonType ( ControlType == Button ) can be Momentary, Toggle or Trigger
+-- IndicatorType ( ControlType == Indicator ) can be Led, Meter, Text or Status
+-- ControlUnit ( ControlType == Knob ) can be Hz, Float, Integer, Pan, Percent, Position or Seconds
+function GetControls(props)
+    ctls = {
+        -- System Pins
+        {
+            Name = "online",
+            ControlType = "Indicator",
+            IndicatorType = "Led",
+            PinStyle = "Output",
+            Count = 1,
+            UserPin = true
+        },
+        {
+            Name = "ip_address",
+            ControlType = "Indicator",
+            IndicatorType = "Text",
+            PinStyle = "Output",
+            Count = 1,
+            UserPin = true
+        },
+        {
+            Name = "model",
+            ControlType = "Indicator",
+            IndicatorType = "Status",
+            PinStyle = "Output",
+            Count = 1,
+            UserPin = true
+        },
+        {
+            Name = "firmware_version",
+            ControlType = "Indicator",
+            IndicatorType = "Text",
+            PinStyle = "Output",
+            Count = 1,
+            UserPin = true
+        },
+        {
+            Name = "switcher_output",
+            ControlType = "Text",
+            PinStyle = "Both",
+            UserPin = true
+        }
+    }
+    for s = 1, input_count do
+        table.insert(
+            ctls,
+            {
+                Name = "input_signal_" .. s,
+                ControlType = "Indicator",
+                IndicatorType = "Led",
+                PinStyle = "Output",
+                UserPin = true
+            }
+        )
+        table.insert(
+            ctls,
+            {
+                Name = "input_select_" .. s,
+                ControlType = "Button",
+                ButtonType = "Toggle",
+                PinStyle = "Both",
+                UserPin = true
+            }
+        )
+    end
+    return ctls
+end
+
+local pagenames = {
+    "Switcher"
+}
+
+-- This function allows you to populate pages in your plugin.
+function GetPages(props)
+    pages = {}
+
+    table.insert(pages, {name = pagenames[1]})
+
+    return pages
+end
+
+-- This function allows you to layout pages in your plugin.
+function GetControlLayout(props)
+    local layout = {}
+
+    local current_page = pagenames[props["page_index"].Value]
+
+    local title_size = {224, 32}
+    local btn_size = {32, 24}
+    local status_groupbox_size = {title_size[1], 5 * btn_size[2]}
+    local matrix_groupbox_position = {0, title_size[2] + status_groupbox_size[2] + (0.5 * btn_size[2])}
+    local matrix_groupbox_size = {
+        title_size[1],
+        (4 * btn_size[2]) + (input_count * btn_size[2])
+    }
+
+    graphics = {
+        {
+            Type = "Header",
+            Text = "IDK Ninjar",
+            HTextAlign = "Center",
+            Color = Colors.idk_red,
+            FontSize = 16,
+            Position = {0, 0},
+            Size = title_size
+        },
+        {
+            Type = "GroupBox", -- This is the overall groupbox that will give the plugin a more 'contained' look
+            Text = "Status",
+            HTextAlign = "Left",
+            Fill = Colors.White,
+            CornerRadius = 8,
+            StrokeColor = Colors.idk_red,
+            Color = Colors.idk_red,
+            StrokeWidth = 1,
+            Position = {0, title_size[2]},
+            Size = status_groupbox_size
+        },
+        {
+            Type = "Text",
+            Text = "Online:",
+            Font = "Roboto",
+            FontSize = 12,
+            FontStyle = "Bold",
+            HTextAlign = "Right",
+            Color = Colors.Black,
+            Position = {0, title_size[2] + (0.5 * btn_size[2])},
+            Size = {3 * btn_size[1], btn_size[2]}
+        },
+        {
+            Type = "Text",
+            Text = "IP Address:",
+            Font = "Roboto",
+            FontSize = 12,
+            FontStyle = "Bold",
+            HTextAlign = "Right",
+            Color = Colors.Black,
+            Position = {0, title_size[2] + (1.5 * btn_size[2])},
+            Size = {3 * btn_size[1], btn_size[2]}
+        },
+        {
+            Type = "Text",
+            Text = "Model:",
+            Font = "Roboto",
+            FontSize = 12,
+            FontStyle = "Bold",
+            HTextAlign = "Right",
+            Color = Colors.Black,
+            Position = {0, title_size[2] + (2.5 * btn_size[2])},
+            Size = {3 * btn_size[1], btn_size[2]}
+        },
+        {
+            Type = "Text",
+            Text = "Firmware:",
+            Font = "Roboto",
+            FontSize = 12,
+            FontStyle = "Bold",
+            HTextAlign = "Right",
+            Color = Colors.Black,
+            Position = {0, title_size[2] + (3.5 * btn_size[2])},
+            Size = {3 * btn_size[1], btn_size[2]}
+        },
+        {
+            Type = "GroupBox",
+            Text = current_page,
+            HTextAlign = "Left",
+            Fill = Colors.White,
+            CornerRadius = 8,
+            StrokeColor = Colors.idk_red,
+            Color = Colors.idk_red,
+            StrokeWidth = 1,
+            Position = matrix_groupbox_position,
+            Size = matrix_groupbox_size
+        },
+        {
+            Type = "Text",
+            Text = "Signal",
+            FontSize = 10,
+            Position = {matrix_groupbox_position[1], (matrix_groupbox_position[2] + (2.5 * btn_size[2]))},
+            Size = btn_size
+        }
+    }
+
+    -- System
+    layout["online"] = {
+        PrettyName = "System~Online",
+        Style = "Indicator",
+        Color = {0, 255, 0},
+        Position = {3 * btn_size[1], title_size[2] + (0.5 * btn_size[2])},
+        Size = {btn_size[2], btn_size[2]}
+    }
+    layout["ip_address"] = {
+        PrettyName = "System~IP Address",
+        Style = "TextBox",
+        Position = {3 * btn_size[1], title_size[2] + (1.5 * btn_size[2])},
+        Size = {3 * btn_size[1], btn_size[2]}
+    }
+    layout["model"] = {
+        PrettyName = "System~Model Name",
+        Style = "Text",
+        Position = {3 * btn_size[1], title_size[2] + (2.5 * btn_size[2])},
+        Size = {3 * btn_size[1], btn_size[2]}
+    }
+    layout["firmware_version"] = {
+        PrettyName = "System~Firmware Version",
+        Style = "Text",
+        Position = {3 * btn_size[1], title_size[2] + (3.5 * btn_size[2])},
+        Size = {3 * btn_size[1], btn_size[2]}
+    }
+    layout["switcher_output"] = {
+        PrettyName = "Switcher~Select",
+        Style = "Text",
+        Position = {matrix_groupbox_position[1] + btn_size[1], (matrix_groupbox_position[2] + (2.5 * btn_size[2]))},
+        Size = btn_size
+    }
+    for i = 1, input_count do
+        table.insert(
+            graphics,
+            {
+                Type = "Text",
+                Text = "In" .. i,
+                Position = {
+                    (matrix_groupbox_position[1] + btn_size[1]),
+                    (matrix_groupbox_position[2] + (2.5 * btn_size[2])) + (i * btn_size[2])
+                },
+                Size = btn_size
+            }
+        )
+        layout["input_signal_" .. i] = {
+            PrettyName = string.format("Signal Presence~Input %02i", i),
+            Style = "Indicator",
+            Color = {0, 255, 0},
+            Position = {(matrix_groupbox_position[1] + 4), matrix_groupbox_position[2] + ((i + 2.5) * btn_size[2])},
+            Size = {24, 24}
+        }
+        layout["input_select_" .. i] = {
+            PrettyName = "Switcher~" .. string.format("Input %1i Select", i),
+            Style = "Button",
+            Legend = tostring(i),
+            Position = {
+                btn_size[1],
+                matrix_groupbox_position[2] + (2.5 * btn_size[2]) + (i * btn_size[2])
+            },
+            Size = btn_size
+        }
+    end
+    return layout, graphics
+end
+
+if Controls then
+    -- Local Structure for holding State
+    idk = {
+        Host = "",
+        Port = 1100,
+        Rx = ""
+    }
+
+    -- Build TCP Client
+    conn = TcpSocket.New()
+    conn.ReadTimeout = 0
+    conn.WriteTimeout = 0
+    conn.ReconnectTimeout = 5
+
+    -- Create and setup the Communications Timeout
+    timerComms = Timer.New()
+    timerComms.EventHandler = function(timer)
+        timer:Stop()
+        Controls.online.Boolean = false
+        print("Connection Timed Out")
+        conn:Disconnect()
+        fnConnect()
+    end
+
+    -- Create and setup Polling
+    timerPoll = Timer.New()
+
+    timerPoll.EventHandler = function(timer)
+        fnPoll()
+    end
+
+    function fnInitPoll(activate)
+        timerPoll:Stop()
+        if activate == true then
+            timerPoll:Start(20)
+        end
+    end
+
+    function fnPoll()
+        for i = 1, input_count do
+            fnSend("GSS," .. i .. ",1")
+        end
+    end
+
+    -- Data Sending Helper Function
+    function fnSend(cmd)
+        -- Send to device
+        local command = "@" .. cmd .. "\r\n"
+        print("-->idk::" .. command)
+        conn:Write(command)
+        -- Reset Polling
+        fnInitPoll(true)
+    end
+
+    function fnInit()
+        fnPoll()
+    end
+
+    function switcher_feedback(inp)
+        Controls["switcher_output"].String = inp
+        for i = 1, max_sources do
+            Controls["input_select_" .. i].Boolean = false
+        end
+        if inp ~= "0" then
+            Controls["input_select_" .. inp].Boolean = true
+        end
+    end
+
+    function switch_command(inp)
+        fnSend("SSW," .. inp)
+    end
+
+    -- Setup Utility Callbacks as required
+    conn.Connected = function(conn)
+        print("TCP socket is Connected")
+        -- Set a timer to wait for connection to establish
+        Timer.CallAfter(fnInit, 1)
+        Controls["online"].Boolean = true
+        fnSend("GIV")
+    end
+    conn.Reconnect = function(conn)
+        print("TCP socket is Reconnecting")
+    end
+    conn.Closed = function(conn)
+        print("TCP socket was closed by the remote end")
+        fnInitPoll(false)
+    end
+    conn.Error = function(conn, err)
+        print("TCP socket had an error ::")
+        print(err)
+    end
+    conn.Timeout = function(conn, err)
+        print("TCP socket had an timeout ::")
+        print(err)
+    end
+
+    -- Helper Function - Open TCP Connection
+    function fnConnect()
+        -- Open Connection
+        conn:Connect(idk.Host, idk.Port)
+        print("TCP socket is Connecting")
+        -- Set IP address value
+        if Controls.ip_address then
+            Controls.ip_address.String = idk.Host .. ":" .. idk.Port
+        end
+    end
+    local function split(str, delim)
+        local result = {}
+        for part in str:gmatch("[^" .. delim .. "]+") do
+            result[#result + 1] = part
+        end
+        return result
+    end
+    -- Setup Data Callbacks as required
+    conn.Data = function(conn)
+        -- Read out lines from the buffer
+        line = conn:ReadLine(TcpSocket.EOL.Any)
+        print("line: " .. line)
+        while (line ~= nil) do
+            -- Print Line
+            print(line)
+            if line:sub(1, 4) == "@ERR" then
+                local err = string.match(line, "@ERR,(%d+)")
+                if err == "1" then
+                    print("Error 1: Erroneous parameter format or value")
+                elseif err == "2" then
+                    print("Error 2: Undefined command or wrong format")
+                elseif err == "3" then
+                    print("Error 3: Currently cannot be used. Sequence switching mode is being operated.")
+                elseif err == "8" then
+                    print("Error 8: Loading EDID from the sink device failed.")
+                else
+                    print("Error 99: Unknown error")
+                end
+            elseif line:sub(1, 4) == "@GIV" then
+                local id, ver = string.match(line, "@GSS,(%w+),(%w+)")
+                Controls.model.String = id
+                Controls.firmware_version.String = ver
+            elseif line:sub(1, 5) == "@GSS," then
+                local channel, mode, status = string.match(line, "@GSS,(%d+),(%d+),(%w+)")
+                print(channel, mode, status)
+                if mode == "1" then
+                    Controls["input_signal_" .. channel].Boolean = status ~= "N"
+                end
+            elseif line:sub(1, 5) == "@GSW," then
+                switcher_feedback(line:sub(6, 6))
+            elseif line:sub(1, 5) == "@SSW," then
+                switcher_feedback(line:sub(6, 6))
+            end
+            -- Get New Line
+            line = conn:ReadLine(TcpSocket.EOL.Any)
+        end
+    end
+    -- Set IP address from Properties if present
+    if Properties then
+        if Properties["IP Address"].Value ~= "" then
+            idk.Host = Properties["IP Address"].Value
+            fnConnect()
+        else
+            print("IP Address Property Not Set")
+        end
+    end
+    -- Loop through all Controls and setup Event Handlers
+    Controls["switcher_output"].EventHandler = function()
+        switch_command(Controls["switcher_output"].String)
+    end
+    for p = 1, input_count do
+        Controls["input_" .. p .. "_select"].EventHandler = function()
+            if Controls["input_select_" .. p].Boolean then
+                Controls["switcher_output"].String = tostring(p)
+            else
+                Controls["switcher_output"].String = "0"
+            end
+            switch_command(Controls["switcher_output"].String)
+        end
+    end
+end
