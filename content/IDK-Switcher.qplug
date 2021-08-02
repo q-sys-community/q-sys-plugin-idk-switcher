@@ -96,8 +96,22 @@ function GetControls(props)
             UserPin = true
         },
         {
+            Name = "front_panel_lock",
+            ControlType = "Button",
+            ButtonType = "Toggle",
+            PinStyle = "Both",
+            UserPin = true
+        },
+        {
             Name = "switcher_output",
             ControlType = "Text",
+            PinStyle = "Both",
+            UserPin = true
+        },
+        {
+            Name = "audio_mute",
+            ControlType = "Button",
+            ButtonType = "Toggle",
             PinStyle = "Both",
             UserPin = true
         }
@@ -149,16 +163,16 @@ function GetControlLayout(props)
     local title_size = {224, 32}
     local btn_size = {32, 24}
     local status_groupbox_size = {title_size[1], 5 * btn_size[2]}
-    local matrix_groupbox_position = {0, title_size[2] + status_groupbox_size[2] + (0.5 * btn_size[2])}
-    local matrix_groupbox_size = {
+    local switcher_groupbox_position = {0, title_size[2] + status_groupbox_size[2] + (0.5 * btn_size[2])}
+    local switcher_groupbox_size = {
         title_size[1],
-        (4 * btn_size[2]) + (input_count * btn_size[2])
+        (3 * btn_size[2]) + (input_count * btn_size[2])
     }
 
     graphics = {
         {
             Type = "Header",
-            Text = "IDK Ninjar",
+            Text = "IDK Switcher",
             HTextAlign = "Center",
             Color = Colors.idk_red,
             FontSize = 16,
@@ -230,14 +244,14 @@ function GetControlLayout(props)
             StrokeColor = Colors.idk_red,
             Color = Colors.idk_red,
             StrokeWidth = 1,
-            Position = matrix_groupbox_position,
-            Size = matrix_groupbox_size
+            Position = switcher_groupbox_position,
+            Size = switcher_groupbox_size
         },
         {
             Type = "Text",
             Text = "Signal",
             FontSize = 10,
-            Position = {matrix_groupbox_position[1], (matrix_groupbox_position[2] + (2.5 * btn_size[2]))},
+            Position = {switcher_groupbox_position[1], (switcher_groupbox_position[2] + (1.5 * btn_size[2]))},
             Size = btn_size
         }
     }
@@ -249,6 +263,15 @@ function GetControlLayout(props)
         Color = {0, 255, 0},
         Position = {3 * btn_size[1], title_size[2] + (0.5 * btn_size[2])},
         Size = {btn_size[2], btn_size[2]}
+    }
+    layout["front_panel_lock"] = {
+        PrettyName = "System~Front Panel Lock",
+        Style = "Button",
+        Legend = "Front Panel Lock",
+        Margin = 1,
+        Color = {223, 0, 36},
+        Position = {4 * btn_size[1], title_size[2] + (0.5 * btn_size[2])},
+        Size = {2 * btn_size[1], btn_size[2]}
     }
     layout["ip_address"] = {
         PrettyName = "System~IP Address",
@@ -271,8 +294,20 @@ function GetControlLayout(props)
     layout["switcher_output"] = {
         PrettyName = "Switcher~Select",
         Style = "Text",
-        Position = {matrix_groupbox_position[1] + btn_size[1], (matrix_groupbox_position[2] + (2.5 * btn_size[2]))},
+        Position = {switcher_groupbox_position[1] + (2 * btn_size[1]), (switcher_groupbox_position[2] + (1.5 * btn_size[2]))},
         Size = btn_size
+    }
+    layout["audio_mute"] = {
+        PrettyName = string.format("Audio Mute"),
+        Style = "Button",
+        Legend = "Audio Mute",
+        Color = {223, 0, 36},
+        Margin = 1,
+        Position = {
+            (switcher_groupbox_position[1] + 4 * btn_size[1]),
+            (switcher_groupbox_position[2] + 1.5 * btn_size[2])
+        },
+        Size = {2 * btn_size[1], btn_size[2]}
     }
     for i = 1, input_count do
         table.insert(
@@ -281,8 +316,8 @@ function GetControlLayout(props)
                 Type = "Text",
                 Text = "In" .. i,
                 Position = {
-                    (matrix_groupbox_position[1] + btn_size[1]),
-                    (matrix_groupbox_position[2] + (2.5 * btn_size[2])) + (i * btn_size[2])
+                    (switcher_groupbox_position[1] + btn_size[1]),
+                    (switcher_groupbox_position[2] + (1.5 * btn_size[2])) + (i * btn_size[2])
                 },
                 Size = btn_size
             }
@@ -291,7 +326,7 @@ function GetControlLayout(props)
             PrettyName = string.format("Signal Presence~Input %02i", i),
             Style = "Indicator",
             Color = {0, 255, 0},
-            Position = {(matrix_groupbox_position[1] + 4), matrix_groupbox_position[2] + ((i + 2.5) * btn_size[2])},
+            Position = {(switcher_groupbox_position[1] + 4), switcher_groupbox_position[2] + ((i + 1.5) * btn_size[2])},
             Size = {24, 24}
         }
         layout["input_select_" .. i] = {
@@ -299,8 +334,8 @@ function GetControlLayout(props)
             Style = "Button",
             Legend = tostring(i),
             Position = {
-                btn_size[1],
-                matrix_groupbox_position[2] + (2.5 * btn_size[2]) + (i * btn_size[2])
+                switcher_groupbox_position[1] + (2 * btn_size[1]),
+                switcher_groupbox_position[2] + (1.5 * btn_size[2]) + (i * btn_size[2])
             },
             Size = btn_size
         }
@@ -308,7 +343,7 @@ function GetControlLayout(props)
     return layout, graphics
 end
 
-if Controls then
+if Controls then 
     -- Local Structure for holding State
     idk = {
         Host = "",
@@ -446,6 +481,10 @@ if Controls then
                 local id, ver = string.match(line, "@GSS,(%w+),(%w+)")
                 Controls.model.String = id
                 Controls.firmware_version.String = ver
+            --[[elseif line:sub(1, 5) == "@GLS," then -- or @SLS
+                Controls["front_panel_lock"].Boolean = line:sub(6, 6) == "1"
+            elseif line:sub(1, 5) == "@SLS," then
+                Controls["front_panel_lock"].Boolean = line:sub(6, 6) == "1"]]
             elseif line:sub(1, 5) == "@GSS," then
                 local channel, mode, status = string.match(line, "@GSS,(%d+),(%d+),(%w+)")
                 print(channel, mode, status)
@@ -456,6 +495,8 @@ if Controls then
                 switcher_feedback(line:sub(6, 6))
             elseif line:sub(1, 5) == "@SSW," then
                 switcher_feedback(line:sub(6, 6))
+            --elseif line:sub(1, 5) == "@GAM," or line:sub(1, 5) == "@SAM," then
+                --Controls["audio_mute"].Boolean = line:sub(6, 6) == "1"
             end
             -- Get New Line
             line = conn:ReadLine(TcpSocket.EOL.Any)
@@ -470,12 +511,25 @@ if Controls then
             print("IP Address Property Not Set")
         end
     end
-    -- Loop through all Controls and setup Event Handlers
+    Controls["front_panel_lock"].EventHandler = function()
+        if Controls["front_panel_lock"].Boolean == true then
+            fnSend("SLS,1")
+        else
+            fnSend("SLS,0")
+        end
+    end
+    Controls["audio_mute"].EventHandler = function()
+        if Controls["audio_mute"].Boolean then
+            fnSend("SAM,1")
+        else
+            fnSend("SAM,0")
+        end
+    end
     Controls["switcher_output"].EventHandler = function()
         switch_command(Controls["switcher_output"].String)
     end
     for p = 1, input_count do
-        Controls["input_" .. p .. "_select"].EventHandler = function()
+        Controls["input_select_" .. p].EventHandler = function()
             if Controls["input_select_" .. p].Boolean then
                 Controls["switcher_output"].String = tostring(p)
             else
