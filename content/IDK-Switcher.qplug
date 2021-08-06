@@ -82,7 +82,7 @@ function GetControls(props)
         {
             Name = "model",
             ControlType = "Indicator",
-            IndicatorType = "Status",
+            IndicatorType = "Text",
             PinStyle = "Output",
             Count = 1,
             UserPin = true
@@ -117,7 +117,7 @@ function GetControls(props)
         }
     }
     for s = 1, input_count do
-        table.insert(
+        --[[table.insert(
             ctls,
             {
                 Name = "input_signal_" .. s,
@@ -126,7 +126,7 @@ function GetControls(props)
                 PinStyle = "Output",
                 UserPin = true
             }
-        )
+        )]]
         table.insert(
             ctls,
             {
@@ -246,14 +246,14 @@ function GetControlLayout(props)
             StrokeWidth = 1,
             Position = switcher_groupbox_position,
             Size = switcher_groupbox_size
-        },
-        {
+        }
+        --[[{
             Type = "Text",
             Text = "Signal",
             FontSize = 10,
             Position = {switcher_groupbox_position[1], (switcher_groupbox_position[2] + (1.5 * btn_size[2]))},
             Size = btn_size
-        }
+        }]]
     }
 
     -- System
@@ -322,13 +322,13 @@ function GetControlLayout(props)
                 Size = btn_size
             }
         )
-        layout["input_signal_" .. i] = {
+        --[[layout["input_signal_" .. i] = {
             PrettyName = string.format("Signal Presence~Input %02i", i),
             Style = "Indicator",
             Color = {0, 255, 0},
             Position = {(switcher_groupbox_position[1] + 4), switcher_groupbox_position[2] + ((i + 1.5) * btn_size[2])},
             Size = {24, 24}
-        }
+        }]]
         layout["input_select_" .. i] = {
             PrettyName = "Switcher~" .. string.format("Input %1i Select", i),
             Style = "Button",
@@ -382,9 +382,13 @@ if Controls then
     end
 
     function fnPoll()
-        for i = 1, input_count do
+        -- The API appears to be bugged, so signal status polling is useless for now
+        --[[ for i = 1, input_count do
             fnSend("GSS," .. i .. ",1")
-        end
+        end]] 
+        fnSend("GSW")
+        fnSend("GLS")
+        fnSend("GAM")
     end
 
     -- Data Sending Helper Function
@@ -398,12 +402,13 @@ if Controls then
     end
 
     function fnInit()
+        fnSend("GIV")
         fnPoll()
     end
 
     function switcher_feedback(inp)
         Controls["switcher_output"].String = inp
-        for i = 1, max_sources do
+        for i = 1, input_count do
             Controls["input_select_" .. i].Boolean = false
         end
         if inp ~= "0" then
@@ -417,24 +422,28 @@ if Controls then
 
     -- Setup Utility Callbacks as required
     conn.Connected = function(conn)
+        Controls.online.Boolean = true
         print("TCP socket is Connected")
         -- Set a timer to wait for connection to establish
         Timer.CallAfter(fnInit, 1)
         Controls["online"].Boolean = true
-        fnSend("GIV")
+        
     end
     conn.Reconnect = function(conn)
         print("TCP socket is Reconnecting")
     end
     conn.Closed = function(conn)
+        Controls.online.Boolean = false
         print("TCP socket was closed by the remote end")
         fnInitPoll(false)
     end
     conn.Error = function(conn, err)
+        Controls.online.Boolean = false
         print("TCP socket had an error ::")
         print(err)
     end
     conn.Timeout = function(conn, err)
+        Controls.online.Boolean = false
         print("TCP socket had an timeout ::")
         print(err)
     end
@@ -478,12 +487,16 @@ if Controls then
                     print("Error 99: Unknown error")
                 end
             elseif line:sub(1, 4) == "@GIV" then
-                local id, ver = string.match(line, "@GSS,(%w+),(%w+)")
-                Controls.model.String = id
-                Controls.firmware_version.String = ver
-            --[[elseif line:sub(1, 5) == "@GLS," then -- or @SLS
+                if line:sub(1,16) == "@GIV,IMP-400UHD," then
+                    Controls.model.String = "IMP-400UHD"
+                    Controls.firmware_version.String = line:sub(17,-1)
+                elseif line:sub(1,14) == "@GIV,IMP-S41U," then
+                    Controls.model.String = "IMP-S41U"
+                    Controls.firmware_version.String = line:sub(15,-1)
+                end
+            elseif line:sub(1, 5) == "@GLS," then
                 Controls["front_panel_lock"].Boolean = line:sub(6, 6) == "1"
-            elseif line:sub(1, 5) == "@SLS," then
+            --[[elseif line:sub(1, 5) == "@SLS," then
                 Controls["front_panel_lock"].Boolean = line:sub(6, 6) == "1"]]
             elseif line:sub(1, 5) == "@GSS," then
                 local channel, mode, status = string.match(line, "@GSS,(%d+),(%d+),(%w+)")
@@ -495,8 +508,8 @@ if Controls then
                 switcher_feedback(line:sub(6, 6))
             elseif line:sub(1, 5) == "@SSW," then
                 switcher_feedback(line:sub(6, 6))
-            --elseif line:sub(1, 5) == "@GAM," or line:sub(1, 5) == "@SAM," then
-                --Controls["audio_mute"].Boolean = line:sub(6, 6) == "1"
+            elseif line:sub(1, 5) == "@GAM," then -- or line:sub(1, 5) == "@SAM," then
+                Controls.audio_mute.Boolean = line:sub(6, 6) == "1"
             end
             -- Get New Line
             line = conn:ReadLine(TcpSocket.EOL.Any)
